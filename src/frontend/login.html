@@ -1,23 +1,25 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>À propos – BinWatch</title>
+    <title>Connexion – BinWatch</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color:#f8f9fa; }
         .login-container{
-            max-width:400px; margin:50px auto; padding:20px;
-            background:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,.1);
+            max-width:400px;
+            margin:50px auto;
+            padding:20px;
+            background:#fff;
+            border-radius:8px;
+            box-shadow:0 4px 6px rgba(0,0,0,.1);
         }
         .login-container h1{ color:#198754; }
     </style>
 </head>
 <body class="bg-light text-dark">
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg bg-success shadow sticky-top">
     <div class="container">
         <a class="navbar-brand d-flex align-items-center text-white fw-bold fs-4" href="index.html"
@@ -38,14 +40,12 @@
                 <li class="nav-item"><a class="nav-link text-white" href="map.html">Carte</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="about.html">À propos</a></li>
 
-                <!-- Dashboard (caché par défaut) -->
                 <li class="nav-item d-none" id="dashboardNav">
                     <a class="nav-link text-white" href="dashboard.html">Dashboard</a>
                 </li>
             </ul>
         </div>
 
-        <!-- Bouton compte -->
         <a id="accountBtn" class="btn btn-outline-light" href="login.html">Connexion</a>
     </div>
 </nav>
@@ -53,7 +53,6 @@
 <div class="login-container">
     <h1 class="text-center mb-4">Connexion</h1>
 
-    <!-- alert placeholder -->
     <div id="alertArea"></div>
 
     <form id="loginForm" novalidate>
@@ -78,39 +77,41 @@
 </footer>
 
 <script>
-    const form   = document.getElementById('loginForm');
+    const API_BASE_URL = "https://binwatch-api.onrender.com";
+
+    const form = document.getElementById('loginForm');
     const alertA = document.getElementById('alertArea');
 
-    function showAlert(msg, type='danger'){
+    function showAlert(msg, type = 'danger') {
         alertA.innerHTML =
             `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
-         ${msg}
-         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-       </div>`;
+                ${msg}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>`;
     }
 
-    form.addEventListener('submit', async e=>{
+    form.addEventListener('submit', async e => {
         e.preventDefault();
 
-        const email    = document.getElementById('email').value.trim();
+        const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
 
-        try{
-            const res  = await fetch('/login',{
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({ email, password })
+        try {
+            const res = await fetch(`${API_BASE_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
             });
+
             const data = await res.json();
 
-            if(!res.ok){
+            if (!res.ok) {
                 throw new Error(data.error || 'Erreur serveur');
             }
 
-            // succès → stocke JWT et redirige
             localStorage.setItem('token', data.token);
-            window.location.href = 'index.html';   // ou dashboard.html si tu préfères
-        }catch(err){
+            window.location.href = 'index.html';
+        } catch (err) {
             showAlert(err.message);
         }
     });
