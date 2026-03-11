@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const fetch = require("node-fetch");
 const FormData = require("form-data");
+const cors = require("cors");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -23,6 +24,15 @@ if (!JWT_SECRET) {
   throw new Error("Missing required environment variable: JWT_SECRET");
 }
 
+const allowedOrigins = [
+  "https://binwatch.vercel.app",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
+  "null"
+];
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -32,6 +42,22 @@ const UPLOADS_DIR = path.join(__dirname, "uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app = express();
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false
+  })
+);
+
+app.options("*", cors());
 
 app.use("/uploads", express.static(UPLOADS_DIR));
 app.use(express.urlencoded({ extended: true }));
@@ -63,13 +89,6 @@ app.get("/health", async (req, res) => {
     });
   }
 });
-
-/*
-Expected tables:
-- public.utilisateur
-- public.image_features
-- public.image_history
-*/
 
 app.post("/register", async (req, res) => {
   let { prenom, nom, email, ville, password } = req.body;
@@ -342,6 +361,31 @@ app.get("/api/seuils", async (req, res) => {
     return res.status(500).json({
       success: false,
       error: "Erreur proxy seuils"
+    });
+  }
+});
+
+app.post("/api/seuils", async (req, res) => {
+  try {
+    const pythonRes = await fetch(`${PYTHON_API_URL}/api/seuils`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    if (!pythonRes.ok) {
+      throw new Error(`Python API responded ${pythonRes.status}`);
+    }
+
+    const json = await pythonRes.json();
+    return res.json(json);
+  } catch (error) {
+    console.error("[/api/seuils] update proxy error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Erreur proxy mise à jour seuils"
     });
   }
 });
