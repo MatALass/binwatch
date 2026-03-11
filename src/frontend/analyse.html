@@ -10,6 +10,10 @@
       max-height: 60px;
       object-fit: cover;
     }
+    #preview {
+      max-height: 320px;
+      object-fit: contain;
+    }
   </style>
 </head>
 <body class="bg-light text-dark">
@@ -48,52 +52,68 @@
   <h1 class="text-success mb-4">Module d’analyse</h1>
   <p>Téléversez une image, ajoutez des informations, puis laissez BinWatch analyser l’état de la poubelle.</p>
 
+  <div id="warmupAlert" class="alert alert-warning d-none" role="alert">
+    <div class="d-flex align-items-center gap-3">
+      <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+      <div>
+        <strong>Préparation du service d’analyse…</strong><br>
+        Le backend gratuit peut mettre quelques secondes à se réveiller au premier appel.
+      </div>
+    </div>
+  </div>
+
+  <div id="statusAlert"></div>
+
   <form id="uploadForm" enctype="multipart/form-data">
-    <div class="mb-3">
-      <label for="imageInput" class="form-label">Téléverser une image :</label>
-      <input class="form-control" type="file" id="imageInput" name="image" accept="image/*" required>
-    </div>
-
-    <div id="imageContainer" class="mb-3 d-none">
-      <p class="fw-bold">Aperçu :</p>
-      <img id="preview" class="img-fluid border" alt="Prévisualisation">
-      <div class="mt-2">
-        <button type="button" id="btnPleine" class="btn btn-outline-success me-2">
-          Annoter : Pleine
-        </button>
-
-        <button type="button" id="btnVide" class="btn btn-outline-success">
-          Annoter : Vide
-        </button>
+    <fieldset id="uploadFieldset" disabled>
+      <div class="mb-3">
+        <label for="imageInput" class="form-label">Téléverser une image :</label>
+        <input class="form-control" type="file" id="imageInput" name="image" accept="image/*" required>
       </div>
-    </div>
 
-    <div id="detailsContainer" class="mb-3 d-none">
-      <div class="mb-2">
-        <label for="locationField" class="form-label">Localisation :</label>
-        <input class="form-control" type="text" id="locationField" name="location" placeholder="Ex : Rue Victor Hugo, Lyon" required>
-      </div>
-      <div class="mb-2">
-        <label for="dateField" class="form-label">Date de l'observation :</label>
-        <input class="form-control" type="date" id="dateField" name="date" required>
-      </div>
-      <input type="hidden" id="annotationField" name="annotation">
-    </div>
+      <div id="imageContainer" class="mb-3 d-none">
+        <p class="fw-bold">Aperçu :</p>
+        <img id="preview" class="img-fluid border" alt="Prévisualisation">
+        <div class="mt-2">
+          <button type="button" id="btnPleine" class="btn btn-outline-success me-2">
+            Annoter : Pleine
+          </button>
 
-    <button type="submit" class="btn btn-success mt-3 d-none" id="analyzeButton">Analyser</button>
+          <button type="button" id="btnVide" class="btn btn-outline-success">
+            Annoter : Vide
+          </button>
+        </div>
+      </div>
+
+      <div id="detailsContainer" class="mb-3 d-none">
+        <div class="mb-2">
+          <label for="locationField" class="form-label">Localisation :</label>
+          <input class="form-control" type="text" id="locationField" name="location" placeholder="Ex : Rue Victor Hugo, Lyon" required>
+        </div>
+        <div class="mb-2">
+          <label for="dateField" class="form-label">Date de l'observation :</label>
+          <input class="form-control" type="date" id="dateField" name="date" required>
+        </div>
+        <input type="hidden" id="annotationField" name="annotation">
+      </div>
+
+      <button type="submit" class="btn btn-success mt-3 d-none" id="analyzeButton">Analyser</button>
+    </fieldset>
   </form>
 
   <hr class="my-5">
 
   <h2 class="text-success mb-3">Configuration des seuils</h2>
   <form id="seuilsForm" class="row g-3">
-    <div class="col-md-6" id="seuilsInputs"></div>
-    <div class="col-12 d-flex gap-2">
-      <button type="submit" class="btn btn-outline-success">Mettre à jour les seuils</button>
-      <button type="button" class="btn btn-outline-danger" id="resetSeuilsButton">
-        Réinitialiser les seuils
-      </button>
-    </div>
+    <fieldset id="seuilsFieldset" disabled>
+      <div class="col-md-6" id="seuilsInputs"></div>
+      <div class="col-12 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-success">Mettre à jour les seuils</button>
+        <button type="button" class="btn btn-outline-danger" id="resetSeuilsButton">
+          Réinitialiser les seuils
+        </button>
+      </div>
+    </fieldset>
   </form>
 
   <div class="mt-5">
@@ -122,6 +142,7 @@
 
 <script>
   const API_BASE_URL = "https://binwatch-api.onrender.com";
+  const PYTHON_API_HEALTH_URL = "https://binwatch-python-api.onrender.com/health";
 
   function apiUrl(path) {
     return `${API_BASE_URL}${path}`;
@@ -130,6 +151,69 @@
   function absoluteImageUrl(imagePath) {
     if (!imagePath) return "";
     return imagePath.startsWith("http") ? imagePath : `${API_BASE_URL}${imagePath}`;
+  }
+
+  function showStatus(message, type = "info") {
+    const container = document.getElementById("statusAlert");
+    container.innerHTML = `
+      <div class="alert alert-${type}" role="alert">
+        ${message}
+      </div>
+    `;
+  }
+
+  function clearStatus() {
+    document.getElementById("statusAlert").innerHTML = "";
+  }
+
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      return response;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function warmupServices() {
+    const warmupAlert = document.getElementById("warmupAlert");
+    const uploadFieldset = document.getElementById("uploadFieldset");
+    const seuilsFieldset = document.getElementById("seuilsFieldset");
+
+    warmupAlert.classList.remove("d-none");
+    clearStatus();
+
+    try {
+      const [nodeRes, pythonRes] = await Promise.all([
+        fetchWithTimeout(apiUrl("/health"), {}, 30000),
+        fetchWithTimeout(PYTHON_API_HEALTH_URL, {}, 30000)
+      ]);
+
+      if (!nodeRes.ok) {
+        throw new Error(`Node API indisponible (${nodeRes.status})`);
+      }
+
+      if (!pythonRes.ok) {
+        throw new Error(`Python API indisponible (${pythonRes.status})`);
+      }
+
+      uploadFieldset.disabled = false;
+      seuilsFieldset.disabled = false;
+      warmupAlert.classList.add("d-none");
+      clearStatus();
+    } catch (error) {
+      warmupAlert.classList.add("d-none");
+      showStatus(
+        `Le service d’analyse n’a pas pu démarrer correctement. Réessayez dans quelques secondes. Détail : ${error.message}`,
+        "danger"
+      );
+    }
   }
 
   (function () {
@@ -224,7 +308,7 @@
 
   async function chargerSeuils() {
     try {
-      const res = await fetch(apiUrl("/api/seuils"));
+      const res = await fetchWithTimeout(apiUrl("/api/seuils"), {}, 30000);
       const seuils = await res.json();
 
       if (!res.ok || seuils.error) {
@@ -243,7 +327,7 @@
         `;
       }
     } catch (err) {
-      alert("Erreur de chargement des seuils : " + err.message);
+      showStatus("Erreur de chargement des seuils : " + err.message, "warning");
     }
   }
 
@@ -256,23 +340,24 @@
     });
 
     try {
-      const res = await fetch(apiUrl("/api/seuils"), {
+      const res = await fetchWithTimeout(apiUrl("/api/seuils"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
-      });
+      }, 30000);
 
       const data = await res.json();
+
       if (!res.ok || data.error) {
         throw new Error(data.error || "Erreur de mise à jour");
       }
 
-      alert("Seuils mis à jour.");
+      showStatus("Seuils mis à jour.", "success");
       await chargerSeuils();
     } catch (err) {
-      alert("Erreur lors de la mise à jour : " + err.message);
+      showStatus("Erreur lors de la mise à jour : " + err.message, "danger");
     }
   });
 
@@ -280,23 +365,31 @@
     if (!confirm("Confirmer la réinitialisation des seuils par défaut ?")) return;
 
     try {
-      const res = await fetch(apiUrl("/api/seuils/reset"), { method: "POST" });
+      const res = await fetchWithTimeout(apiUrl("/api/seuils/reset"), {
+        method: "POST"
+      }, 30000);
+
       const data = await res.json();
 
       if (!res.ok || data.error) {
         throw new Error(data.error || "Erreur côté serveur");
       }
 
-      alert("Seuils réinitialisés.");
+      showStatus("Seuils réinitialisés.", "success");
       await chargerSeuils();
     } catch (err) {
-      alert("Erreur lors de la réinitialisation : " + err.message);
+      showStatus("Erreur lors de la réinitialisation : " + err.message, "danger");
     }
   });
 
   document.getElementById("uploadForm").addEventListener("submit", async e => {
     e.preventDefault();
     if (!imageInput.files.length) return;
+
+    clearStatus();
+    showStatus("Analyse en cours…", "info");
+    analyzeButton.disabled = true;
+    analyzeButton.textContent = "Analyse en cours...";
 
     const formData = new FormData();
     formData.append("image", imageInput.files[0]);
@@ -311,16 +404,16 @@
     formData.append("seuils", JSON.stringify(seuils));
 
     try {
-      const res = await fetch(apiUrl("/upload"), {
+      const res = await fetchWithTimeout(apiUrl("/upload"), {
         method: "POST",
         body: formData
-      });
-
-      if (!res.ok) {
-        throw new Error(`Erreur serveur : ${res.status}`);
-      }
+      }, 45000);
 
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || `Erreur serveur : ${res.status}`);
+      }
 
       const row = {
         annotation: annotationField.value,
@@ -335,18 +428,27 @@
       sessionStorage.setItem("tmpHist", JSON.stringify(newList));
 
       updateHistoryTable(newList);
+      showStatus(`Analyse terminée : résultat = ${data.label}`, "success");
     } catch (err) {
-      alert(err.message || "Erreur inconnue");
+      showStatus(
+        `Échec de l’analyse. Le service gratuit peut être en cours de réveil. Réessaie dans quelques secondes. Détail : ${err.message}`,
+        "danger"
+      );
+    } finally {
+      analyzeButton.disabled = false;
+      analyzeButton.textContent = "Analyser";
     }
   });
 
   window.addEventListener("load", async () => {
+    await warmupServices();
+
     const headers = {};
     const token = localStorage.getItem("token");
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
     try {
-      const res = await fetch(apiUrl("/history"), { headers });
+      const res = await fetchWithTimeout(apiUrl("/history"), { headers }, 30000);
       if (!res.ok) throw new Error("Impossible de charger l’historique");
 
       const data = await res.json();
