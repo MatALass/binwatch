@@ -1,7 +1,12 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": false,
-  "rewrites": [
-    { "source": "/", "destination": "/index.html" }
+  "routes": [
+    { "src": "/", "dest": "/index.html" },
+    { "src": "/about", "dest": "/about.html" },
+    { "src": "/analyse", "dest": "/analyse.html" },
+    { "src": "/map", "dest": "/map.html" },
+    { "src": "/tri", "dest": "/tri.html" },
+    { "src": "/login", "dest": "/login.html" },
+    { "src": "/register", "dest": "/register.html" },
+    { "src": "/dashboard", "dest": "/dashboard.html" }
   ]
 }
